@@ -14,7 +14,7 @@ on:
       - unlabeled
     
 jobs:
-  guard-skip-coverage-label:
+  guard-label:
     # Only run the guard if the specific label was added
     if: github.event.action == 'labeled' && github.event.label.name == 'skip-coverage-check'
     runs-on: ubuntu-latest
@@ -25,34 +25,46 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ACTOR: ${{ github.actor }}
         run: |
-          AUTHORIZED_USERS=("user1" "user2" "user3" "danielbogomazov")
+          AUTHORIZED_USERS=("user1" "user2" "user3")
           AUTHORIZED=false
           for user in "${AUTHORIZED_USERS[@]}"; do
             if [ "$ACTOR" = "$user" ]; then AUTHORIZED=true; break; fi
           done
 
           if [ "$AUTHORIZED" = "false" ]; then
+            echo "Unauthorized user. Removing label."
             gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "skip-coverage-check"
-            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "@$ACTOR is not authorized..."
-            exit 1
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "@$ACTOR is not authorized to apply the \`skip-coverage-check\` label."
+          else
+            echo "Authorized user. Label remains."
           fi
-
+          # Always exit 0 so this job "succeeds"
+          exit 0
+ 
   coverage-check:
     runs-on: ubuntu-latest
-    # always() ensures this runs even if guard-skip-coverage-label was skipped (because label wasn't added)
-    # but it will FAIL if guard-skip-coverage-label failed (because an unauthorized user added the label)
-    if: |
-      always() && 
-      (needs.guard-skip-coverage-label.result == 'success' || needs.guard-skip-coverage-label.result == 'skipped')
-    needs: [guard-skip-coverage-label]
+    # Wait for the guard job to finish its API calls
+    needs: [guard-label]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Prevent merge
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-coverage-check') }}
+      - name: Check current labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ -f "DO_NOT_MERGE.txt" ]; then
-            echo "Blocking merge."
-            exit 1
+          # Fetch the FRESH list of labels from the API
+          # This is safer than using github.event context because the guard job just changed them
+          CURRENT_LABELS=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels.[].name')
+          
+          echo "Active labels: $CURRENT_LABELS"
+
+          if echo "$CURRENT_LABELS" | grep -q "skip-coverage-check"; then
+            echo "Coverage check skipped via authorized label."
+          else
+            if [ -f "DO_NOT_MERGE.txt" ]; then
+              echo "DO_NOT_MERGE.txt found and no skip-label present. Blocking merge."
+              exit 1
+            fi
           fi
