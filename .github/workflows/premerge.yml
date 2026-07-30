@@ -25,7 +25,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ACTOR: ${{ github.actor }}
         run: |
-          AUTHORIZED_USERS=("user1" "user2" "user3")
+          AUTHORIZED_USERS=("user1" "user2" "user3" "danielbogomazov")
           AUTHORIZED=false
           for user in "${AUTHORIZED_USERS[@]}"; do
             if [ "$ACTOR" = "$user" ]; then AUTHORIZED=true; break; fi
