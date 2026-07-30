@@ -45,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     # Wait for the guard job to finish its API calls
     needs: [guard-label]
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
