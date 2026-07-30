@@ -32,8 +32,8 @@ jobs:
           done
 
           if [ "$AUTHORIZED" = "false" ]; then
-            gh pr edit "$PR_NUMBER" --remove-label "skip-coverage-check"
-            gh pr comment "$PR_NUMBER" --body "@$ACTOR is not authorized to skip coverage checks."
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "skip-coverage-check"
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "@$ACTOR is not authorized..."
             exit 1
           fi
 
