@@ -2,6 +2,7 @@ name: Pre-merge
 
 permissions:
   pull-requests: write
+  contents: read
 
 on:
   pull_request:
@@ -13,8 +14,37 @@ on:
       - unlabeled
     
 jobs:
+  guard-skip-coverage-label:
+    # Only run the guard if the specific label was added
+    if: github.event.action == 'labeled' && github.event.label.name == 'skip-coverage-check'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check user authorization
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          AUTHORIZED_USERS=("user1" "user2" "user3")
+          AUTHORIZED=false
+          for user in "${AUTHORIZED_USERS[@]}"; do
+            if [ "$ACTOR" = "$user" ]; then AUTHORIZED=true; break; fi
+          done
+
+          if [ "$AUTHORIZED" = "false" ]; then
+            gh pr edit "$PR_NUMBER" --remove-label "skip-coverage-check"
+            gh pr comment "$PR_NUMBER" --body "@$ACTOR is not authorized to skip coverage checks."
+            exit 1
+          fi
+
   coverage-check:
     runs-on: ubuntu-latest
+    # always() ensures this runs even if guard-skip-coverage-label was skipped (because label wasn't added)
+    # but it will FAIL if guard-skip-coverage-label failed (because an unauthorized user added the label)
+    if: |
+      always() && 
+      (needs.guard-skip-coverage-label.result == 'success' || needs.guard-skip-coverage-label.result == 'skipped')
+    needs: [guard-skip-coverage-label]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
