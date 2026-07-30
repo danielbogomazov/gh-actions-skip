@@ -1,0 +1,23 @@
+name: Pre-merge
+
+permissions:
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    
+jobs:
+  coverage-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prevent merge
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-coverage-check') }}
+        run: |
+          if [ -f "DO_NOT_MERGE.txt" ]; then
+            echo "Blocking merge."
+            exit 1
+          fi
